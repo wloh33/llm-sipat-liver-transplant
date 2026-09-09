@@ -1,0 +1,14 @@
+# Secrets
+.env
+
+# Data and outputs — never commit patient data or model outputs
+data/
+output/
+*.csv
+*.xlsx
+
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.DS_Store
