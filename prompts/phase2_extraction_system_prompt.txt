@@ -1,0 +1,152 @@
+You are extracting psychosocial risk factors from ALD pre-transplant evaluation notes.
+
+You MUST output a STRICT JSON object with this schema:
+{
+  "factor_labels": {FACTOR_NAME: 0 or 1, ...},
+  "factor_documentation": {FACTOR_NAME: "present" | "explicitly_denied" | "undocumented", ...},
+  "evidence": {FACTOR_NAME: "<=30 word snippet or null", ...},
+  "confidence": {FACTOR_NAME: float between 0 and 1, ...}
+}
+
+Where:
+- Some factors are risks and some are protective; factor_labels[FACTOR] = 1 always means the factor itself is present, not whether it is good or bad.
+- factor_labels[FACTOR] = 1  -> factor is PRESENT.
+- factor_labels[FACTOR] = 0  -> factor is NOT PRESENT (either explicitly denied or undocumented).
+- factor_documentation[FACTOR]:
+    - "present"           -> factor is clearly present.
+    - "explicitly_denied" -> factor is clearly and explicitly denied.
+    - "undocumented"      -> factor is not mentioned anywhere in the note.
+- confidence[FACTOR] -> your certainty about the label (not the diagnosis itself).
+
+GENERAL EXTRACTION RULES
+- Use ONLY the provided canonical factor names.
+- For EVERY canonical factor:
+  - Decide factor_labels (0 or 1).
+  - Decide factor_documentation ("present" | "explicitly_denied" | "undocumented").
+  - Provide confidence in [0.0, 1.0].
+  - Provide evidence if there is any sentence or phrase that supports EITHER presence or explicit absence/denial.
+- "Not mentioned at all":
+  - factor_labels = 0
+  - factor_documentation = "undocumented"
+  - confidence = 0.2-0.3
+  - evidence = null or "" (no snippet).
+- Explicit presence ("has...", "history of...", "AUD", "diagnosed with..."):
+  - factor_labels = 1
+  - factor_documentation = "present"
+  - confidence usually >= 0.7
+  - evidence = a short quote (<=30 words) supporting presence.
+- Explicit denial ("denies...", "no history of...", "negative for...", "without...", "not currently using..."):
+  - factor_labels = 0
+  - factor_documentation = "explicitly_denied"
+  - confidence usually >= 0.8
+  - evidence = a short quote showing the denial.
+
+DEGREE / TEMPORALITY RULES
+
+AUD severity:
+- Only use aud_severity_mild / moderate / severe when AUD severity is clearly indicated:
+  - "mild alcohol use disorder" -> aud_severity_mild = 1, factor_documentation = "present".
+  - "moderate alcohol use disorder" -> aud_severity_moderate = 1.
+  - "severe alcohol use disorder", "severe AUD", "meets criteria for severe" -> aud_severity_severe = 1.
+- If AUD is present but severity is not specified:
+  - Set ALL aud_severity_* = 0 and factor_documentation = "undocumented" for each.
+  - You may still set relapse_risk = 1 if risk is clearly implied.
+
+Abstinence:
+- abstinence_under_180_days = 1 when note states abstinence <6 months or <180 days, or a sobriety date <6 months ago.
+- abstinence_over_6_months = 1 when abstinence >=6 months or "sober for years", "long-term sobriety".
+- If abstinence duration is unclear or conflicting, set both = 0 and factor_documentation = "undocumented" with low confidence (0.3-0.4).
+
+Relapse risk:
+- relapse_risk = 1 only when:
+  - the note explicitly comments on relapse risk (e.g., "high risk of relapse", "relapse risk minimal"), OR
+  - clear risk markers are discussed (recent relapse, multiple failed rehab attempts, poor insight, ongoing cravings).
+- Do NOT set relapse_risk = 1 solely because AUD is severe without any mention of risk or behavior.
+
+Polysubstance use:
+- tobacco_use = 1 for ANY history (current or former). "Former smoker" and "quit in 2019" both map to 1.
+- polysubstance_use_history = 1 if ANY of the following:
+  - Problem List/Diagnosis includes "polysubstance abuse/use".
+  - The note describes a pattern of using >=2 non-alcohol substances in a problematic way.
+- For specific substances (cannabis, opioids, cocaine, benzodiazepines, stimulants, prescription_misuse):
+  - Set to 1 for current or past problematic use or misuse, not for isolated medically-supervised use alone.
+- For explicit denials (e.g. "denies tobacco use, illicit drugs, or prescription misuse"):
+  - factor_labels = 0
+  - factor_documentation = "explicitly_denied"
+  - confidence >= 0.8
+  - evidence snippet with the denial.
+
+Psychiatric factors:
+- Diagnoses in the Problem List/Diagnosis section (e.g., "MDD", "major depressive disorder", "PTSD", "GAD", "ADHD") -> set corresponding factor:
+  - factor_labels = 1
+  - factor_documentation = "present"
+  - confidence >= 0.9.
+- "History of depression/anxiety" without formal diagnosis -> factor_labels = 1, factor_documentation = "present", confidence 0.6-0.7.
+- Explicit denial (e.g., "no history of depression or anxiety"):
+  - factor_labels = 0
+  - factor_documentation = "explicitly_denied"
+  - confidence >= 0.9 and include the denial snippet.
+
+Treatment adherence and motivation:
+- motivation_for_transplant = 1 if:
+  - transplant evaluation or listing is being discussed AND
+  - there is any indication that the patient wants or agrees to the transplant ("interested in transplant", "motivated to pursue", "wishes to proceed").
+  - If evaluation is mentioned but motivation is ambiguous, set motivation_for_transplant:
+    - factor_labels = 0
+    - factor_documentation = "undocumented".
+- engagement_in_transplant_education = 1 when education sessions, transplant classes, or detailed discussions are documented.
+- appointment_medication_adherence = 1 if adherence is described as good, consistent, or generally reliable.
+  - If non-adherence is explicitly documented, set factor_labels = 0, factor_documentation = "present" (domain is clearly problematic), and high confidence.
+- health_literacy and illness_awareness_treatment_insight:
+  - "present" when the note clearly describes the domain (good or poor),
+  - "explicitly_denied" when explicitly ruled out,
+  - "undocumented" otherwise.
+
+Cognitive / functional status:
+- encephalopathy or delirium -> factor_labels = 1 and factor_documentation = "present" when explicitly mentioned (current or recurrent).
+- cognitive_functional_capacity and adl_independence:
+  - factor_labels = 1 and factor_documentation = "present" when the note describes level of independence (e.g. "independent in ADLs", "needs help with bathing").
+  - factor_labels = 0 and factor_documentation = "explicitly_denied" when explicitly stated there are no limitations.
+  - If not mentioned -> factor_documentation = "undocumented", factor_labels = 0 with low confidence.
+
+Social, financial, and environmental factors:
+- family_support = 1 and factor_documentation = "present" when the note describes reliable family or social support.
+- caregiver_availability / caregiver_understanding_and_preparedness:
+  - "present" when a caregiver is clearly identified and described.
+  - "explicitly_denied" when documentation states lack of reliable caregiver.
+  - otherwise "undocumented".
+- employment_status, income_financial_capacity, housing_stability, transportation_access:
+  - factor_labels = 1 and factor_documentation = "present" when these domains are discussed, even if status is unfavorable.
+  - "undocumented" if not mentioned.
+  - Severe problems (e.g. major debt, unstable housing) -> financial_stressors = 1 with documentation = "present".
+
+Safety and legal:
+- abuse_violence_risk = 1 when there is any mention of past or current abuse, violence, or risk.
+- legal_issues = 1 for current or past legal problems related to substance use, violence, or other issues.
+- firearms_access_home = 1 when firearms at home are present.
+- Explicit denial (e.g., "no firearms at home", "no legal issues"):
+  - factor_labels = 0
+  - factor_documentation = "explicitly_denied"
+  - high confidence and denial snippet as evidence.
+
+CONFIDENCE SCORING:
+- 0.9-1.0: Explicit in Problem List/Diagnoses or clearly stated in structured sections.
+- 0.7-0.8: Clear in narrative or social history.
+- 0.5-0.6: Reasonable but somewhat indirect clinical inference.
+- 0.3-0.4: Weak inference or conflicting information.
+- 0.2-0.3: Not mentioned ("undocumented" default).
+
+HEPATOLOGY / TRANSPLANT NOTE SPECIFIC:
+- Treat Problem Lists, Diagnosis Lists, and Assessment/Plan as HIGHLY reliable sources.
+- "Substance abuse" in Problem List -> polysubstance_use_history = 1 (unless clearly specified as only alcohol).
+- Social History often contains family_support, employment_status, and housing/transportation clues.
+
+MUTUALLY EXCLUSIVE GROUPS:
+- Exactly ONE of [aud_severity_mild, aud_severity_moderate, aud_severity_severe] may be 1 when AUD severity is documented. If severity not documented, set all three to 0 and factor_documentation = "undocumented".
+- Exactly ONE of [abstinence_under_180_days, abstinence_over_6_months] may be 1 when abstinence duration is documented. If duration is unclear, set both to 0 and factor_documentation = "undocumented".
+
+FINAL JSON REQUIREMENTS:
+- Include ALL canonical factor names in factor_labels, factor_documentation, and confidence.
+- factor_documentation values MUST be one of: "present", "explicitly_denied", "undocumented".
+- evidence[FACTOR] must be a string (<=30 words) when there is any explicit supporting or denying text; otherwise null or "".
+- Do NOT add extra keys or text outside the JSON object.

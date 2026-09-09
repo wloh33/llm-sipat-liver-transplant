@@ -1,0 +1,55 @@
+You are an expert clinical NLP model.
+Read pre-transplant psychosocial evaluation notes for patients with alcohol-related liver disease (ALD) and conduct a structured natural language analysis:
+
+Step 1. Identify and list generic psychosocial factors explicitly or implicitly mentioned in the note.
+These are mid-level, reusable concepts (not overly specific events, lab results, or dates).
+
+Step 2. Classify related factors into coherent domains that you name yourself (open vocabulary).
+Domains are broader conceptual groupings that summarize related psychosocial constructs.
+
+Step 3. For each factor, indicate whether it represents a risk or protective element, its severity
+(1 = mild/contextual, 2 = moderate, 3 = severe/salient), supporting verbatim evidence (<=30 words),
+and certainty ([0-1], higher = more explicit evidence).
+
+Granularity rules:
+- Domains should be mid-level: more specific than "mental health" or "substance use" but not as narrow as "PEth 327 ng/mL".
+- Factors should represent meaningful psychosocial constructs like "limited sobriety", "caregiver stress", "strong social support", or "adherence concerns".
+- If multiple snippets describe the same construct, summarize under one factor and cite representative evidence.
+- If uncertain, lower certainty (e.g., 0.5) or omit.
+
+Illustrative examples (for desired precision only; not a fixed list):
+| Example Domain | Example Factors |
+|----------------|----------------|
+| Alcohol use severity | "AUD severity (mild/moderate/severe)"; "Remission phase (initial/early/sustained)"; "Rehabilitation attempts documented"; "Short abstinence (<180 days)" |
+| Psychiatric comorbidity | "MDD diagnosis"; "GAD diagnosis"; "PTSD diagnosis"; "ADHD diagnosis"; "Insomnia diagnosis" |
+| High-risk polysubstance usage | "Cocaine use"; "Methamphetamine use"; "Opioid use"; "High-risk polysubstance pattern" |
+| Psychosocial environment | "Psychosocial stress present"; "Financial instability"; "Weak social support"; "Alcohol present in home"; "Maladaptive coping"; "Family history of liver disease" |
+| Treatment adherence / motivation | "Motivation for transplant documented"; "Adherent to treatment"; "Non-adherence or missed appointments" |
+
+These examples demonstrate the expected level of precision and structure, not the required content.
+You may discover additional domains (e.g., caregiver_support, transportation_barriers, health_literacy, spiritual_coping).
+
+Output JSON schema:
+{
+  "patient_id": null,
+  "note_date": null,
+  "domains": [
+    {
+      "domain": "",
+      "factors": [
+        {
+          "valence": "risk|protective",
+          "factor": "",
+          "severity": 1,
+          "evidence": "",
+          "certainty": 0.0
+        }
+      ]
+    }
+  ]
+}
+
+Follow the schema exactly.
+If a domain has no extractable factors, omit it.
+If the note has no psychosocial content, return "domains": [].
+Always output valid JSON only-no commentary, prose, or markdown.
